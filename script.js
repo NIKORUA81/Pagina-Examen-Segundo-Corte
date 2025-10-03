@@ -390,4 +390,204 @@ function mostrarAlertas() {
 }
 
 function showStockAlerts() {
-  google.script.run.withSuccessHandler
+  google.script.run.withSuccessHandler(data => {
+    loading.style.display = "none";
+    const alertProducts = data.filter(p => p.cantidad <= 0 || (p.cantidad <= p.stockMin && p.stockMin > 0));
+    
+    if (alertProducts.length === 0) {
+      container.innerHTML = '<div class="message success">No hay productos con alertas de stock</div>';
+      return;
+    }
+    
+    displayStockTable(alertProducts, container);
+  }).withFailureHandler(error => {
+    loading.style.display = "none";
+    showMessage('stockTable', 'Error: ' + error, 'error');
+  }).obtenerStock();
+}
+
+function showStockAlerts() {
+  google.script.run.withSuccessHandler(data => {
+    const container = document.getElementById('alertsContainer');
+    const alertProducts = data.filter(p => p.cantidad <= 0 || (p.cantidad <= p.stockMin && p.stockMin > 0));
+    
+    if (alertProducts.length === 0) {
+      container.innerHTML = '<div class="message success">No hay alertas de stock</div>';
+      return;
+    }
+    
+    let html = '<div class="table-container"><table><thead><tr><th>Código</th><th>Nombre</th><th>Stock Actual</th><th>Stock Mín.</th><th>Estado</th></tr></thead><tbody>';
+    
+    alertProducts.forEach(producto => {
+      let statusClass = producto.cantidad <= 0 ? 'status-zero' : 'status-low';
+      let estado = producto.cantidad <= 0 ? 'Sin Stock' : 'Stock Bajo';
+      
+      html += `
+        <tr class="${statusClass}">
+          <td>${producto.codigo}</td>
+          <td>${producto.nombre}</td>
+          <td>${producto.cantidad}</td>
+          <td>${producto.stockMin}</td>
+          <td>${estado}</td>
+        </tr>
+      `;
+    });
+    
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+  }).withFailureHandler(error => {
+    showMessage('alertsContainer', 'Error: ' + error, 'error');
+  }).obtenerStock();
+}
+
+function mostrarHistorial() {
+  const fechaDesde = document.getElementById("fechaDesde").value;
+  const fechaHasta = document.getElementById("fechaHasta").value;
+  const filtroTipo = document.getElementById("filtroTipo").value;
+
+  if (!fechaDesde || !fechaHasta) {
+    showMessage('historialTable', 'Seleccione fechas válidas', 'warning');
+    return;
+  }
+
+  google.script.run.withSuccessHandler(data => {
+    displayHistorialTable(data);
+  }).withFailureHandler(error => {
+    showMessage('historialTable', 'Error: ' + error, 'error');
+  }).obtenerHistorial(fechaDesde, fechaHasta, filtroTipo);
+}
+
+function displayHistorialTable(data) {
+  const container = document.getElementById('historialTable');
+  
+  if (data.length === 0) {
+    container.innerHTML = '<div class="message warning">No hay movimientos en el período seleccionado</div>';
+    return;
+  }
+
+  let html = `
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Código</th>
+          <th>Producto</th>
+          <th>Tipo</th>
+          <th>Cantidad</th>
+          <th>Observaciones</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+
+  data.forEach(movimiento => {
+    const tipoClass = movimiento.tipo === 'INGRESO' || movimiento.tipo === 'AJUSTE_POSITIVO' ? 'text-success' : 'text-danger';
+    
+    html += `
+      <tr>
+        <td>${movimiento.fecha}</td>
+        <td>${movimiento.codigo}</td>
+        <td>${movimiento.nombre}</td>
+        <td class="${tipoClass}">${movimiento.tipo}</td>
+        <td>${movimiento.cantidad}</td>
+        <td>${movimiento.observaciones || '-'}</td>
+      </tr>
+    `;
+  });
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function exportarStock() {
+  google.script.run.exportarStockACsv();
+}
+
+function exportarReporte() {
+  const fechaDesde = document.getElementById("fechaDesde").value;
+  const fechaHasta = document.getElementById("fechaHasta").value;
+  const filtroTipo = document.getElementById("filtroTipo").value;
+
+  if (!fechaDesde || !fechaHasta) {
+    showMessage('historialTable', 'Seleccione fechas válidas', 'warning');
+    return;
+  }
+
+  google.script.run.exportarReporteACsv(fechaDesde, fechaHasta, filtroTipo);
+}
+
+function limpiarFormProducto() {
+  document.getElementById('formProducto').reset();
+  document.getElementById("stockMinProd").value = "0";
+  document.getElementById('msgProd').innerHTML = '';
+}
+
+function limpiarFormMovimiento() {
+  document.getElementById('formMovimiento').reset();
+  document.getElementById("fechaMov").valueAsDate = new Date();
+  document.getElementById('msgMov').innerHTML = '';
+}
+
+function limpiarBusqueda() {
+  document.getElementById('buscarTexto').value = '';
+  document.getElementById('resultadosBusqueda').innerHTML = '';
+}
+
+function limpiarTodosFormularios() {
+  limpiarFormProducto();
+  limpiarFormMovimiento();
+  limpiarBusqueda();
+  showMessage('configResults', 'Todos los formularios han sido limpiados', 'success');
+}
+
+function validarIntegridad() {
+  google.script.run.withSuccessHandler(resultado => {
+    showMessage('configResults', resultado, 'info');
+  }).withFailureHandler(error => {
+    showMessage('configResults', 'Error en validación: ' + error, 'error');
+  }).validarIntegridad();
+}
+
+function inicializarSistema() {
+  if (confirm('¿Está seguro de que desea inicializar el sistema? Esto creará las hojas necesarias.')) {
+    google.script.run.withSuccessHandler(resultado => {
+      showMessage('configResults', resultado, 'success');
+    }).withFailureHandler(error => {
+      showMessage('configResults', 'Error: ' + error, 'error');
+    }).inicializarSistema();
+  }
+}
+
+function confirmarReset() {
+  if (confirm('¿ESTÁ SEGURO? Esto eliminará todos los datos. Esta acción no se puede deshacer.')) {
+    const confirmacion = prompt('Escriba "RESET" para confirmar:');
+    if (confirmacion === 'RESET') {
+      google.script.run.withSuccessHandler(resultado => {
+        showMessage('configResults', resultado, 'success');
+      }).withFailureHandler(error => {
+        showMessage('configResults', 'Error: ' + error, 'error');
+      }).resetSistema();
+    } else {
+      showMessage('configResults', 'Reset cancelado', 'warning');
+    }
+  }
+}
+
+function showMessage(containerId, message, type) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = `<div class="message ${type}">${message}</div>`;
+}
+
+function verDetalleProducto(codigo) {
+  google.script.run.withSuccessHandler(detalle => {
+    alert(`Detalle del producto ${codigo}:\n\n` +
+          `Nombre: ${detalle.nombre}\n` +
+          `Unidad: ${detalle.unidad}\n` +
+          `Grupo: ${detalle.grupo}\n` +
+          `Stock Mínimo: ${detalle.stockMin}\n` +
+          `Stock Actual: ${detalle.cantidad}\n` +
+          `Última Actualización: ${detalle.ultimaActualizacion}`);
+  }).withFailureHandler(error => {
+    alert('Error al obtener detalle: ' + error);
+  }).obtenerDetalleProducto(codigo);
+}
